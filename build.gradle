@@ -1,7 +1,7 @@
 plugins {
-    id "dev.architectury.loom" version "1.9-SNAPSHOT" apply false
-    id "architectury-plugin" version "3.4-SNAPSHOT"
-    id "com.github.johnrengelman.shadow" version "8.1.+" apply false
+    id "dev.architectury.loom-no-remap" version "1.17.487" apply false
+    id "architectury-plugin" version "3.5.168"
+    id "com.gradleup.shadow" version "9.4.2" apply false
     id "me.modmuss50.mod-publish-plugin" version "0.8.+" apply false
 }
 
@@ -19,18 +19,15 @@ Map<String, String> modProperties() {
 
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
-import net.fabricmc.loom.task.AbstractRemapJarTask
 
 subprojects {
-    apply plugin: "dev.architectury.loom"
+    apply plugin: "dev.architectury.loom-no-remap"
     apply plugin: "architectury-plugin"
 
     dependencies {
+        // Minecraft 26.1+ ships unobfuscated with official names and parameter names,
+        // so no mappings (officialMojangMappings/parchment) are declared anymore.
         minecraft "com.mojang:minecraft:$minecraft_version"
-        mappings loom.layered() {
-            officialMojangMappings()
-            parchment "org.parchmentmc.data:parchment-1.21.1:2024.11.17@zip"
-        }
     }
 
     processResources {
@@ -49,7 +46,7 @@ subprojects {
         }
     }
 
-    tasks.withType(AbstractRemapJarTask).configureEach {
+    tasks.withType(org.gradle.api.tasks.bundling.Jar).configureEach {
         archiveAppendix = project.name
     }
 }
@@ -73,22 +70,11 @@ allprojects {
                 includeGroup "maven.modrinth"
             }
         }
-
-
-        exclusiveContent {
-            forRepositories maven {
-                name = 'ParchmentMC'
-                url = 'https://maven.parchmentmc.org'
-            }
-            filter {
-                includeGroup "org.parchmentmc.data"
-            }
-        }
     }
 
     tasks.withType(JavaCompile).configureEach {
         options.encoding = "UTF-8"
-        options.release = 21
+        options.release = 25
 //        options.compilerArgs << '-g:none'
     }
 
@@ -102,16 +88,16 @@ allprojects {
 publishMods {
     changelog = project.changelog
     type = STABLE
-    def fabricJar = project.provider { project(":fabric").remapJar }.flatMap { it.archiveFile }
-    def fabricSources = project.provider { project(":fabric").remapSourcesJar }.flatMap { it.archiveFile }
-    def neoForgeJar = project.provider { project(":neoforge").remapJar }.flatMap { it.archiveFile }
-    def neoForgeSources = project.provider { project(":neoforge").remapSourcesJar }.flatMap { it.archiveFile }
+    def fabricJar = project.provider { project(":fabric").shadowJar }.flatMap { it.archiveFile }
+    def fabricSources = project.provider { project(":fabric").sourcesJar }.flatMap { it.archiveFile }
+    def neoForgeJar = project.provider { project(":neoforge").shadowJar }.flatMap { it.archiveFile }
+    def neoForgeSources = project.provider { project(":neoforge").sourcesJar }.flatMap { it.archiveFile }
 
     def fabric = publishOptions {
         file = fabricJar
         additionalFiles.from fabricSources
         version = project.version + "-fabric"
-        displayName = "[Fabric 1.20.5-1.21.1] $display_name $project.version"
+        displayName = "[Fabric 26.1.2] $display_name $project.version"
         modLoaders.addAll "fabric", "quilt"
     }
 
@@ -119,7 +105,7 @@ publishMods {
         file = neoForgeJar
         additionalFiles.from neoForgeSources
         version = project.version + "-neoforge"
-        displayName = "[(Neo)Forge 1.20.5-1.21.1] $display_name $project.version"
+        displayName = "[NeoForge 26.1.2] $display_name $project.version"
         modLoaders.add "neoforge"
     }
 
@@ -140,33 +126,32 @@ publishMods {
     curseforge("curseFabric") {
         from curseOptions, fabric
         minecraftVersionRange {
-            start = "1.20.5"
-            end = "1.21.1"
+            start = "26.1"
+            end = "26.1.2"
         }
     }
 
     curseforge("curseNeoForge") {
         from curseOptions, neoForge
         minecraftVersionRange {
-            start = "1.20.5"
-            end = "1.21.1"
+            start = "26.1"
+            end = "26.1.2"
         }
     }
 
     modrinth("modrinthFabric") {
         from modrinthOptions, fabric
         minecraftVersionRange {
-            start = "24w12a"
-            end = "24w34a"
-            includeSnapshots = true
+            start = "26.1"
+            end = "26.1.2"
         }
     }
 
     modrinth("modrinthNeoForge") {
         from modrinthOptions, neoForge
         minecraftVersionRange {
-            start = "1.20.5"
-            end = "1.21.1"
+            start = "26.1"
+            end = "26.1.2"
         }
     }
 

@@ -1,5 +1,5 @@
 plugins {
-    id "com.github.johnrengelman.shadow"
+    id "com.gradleup.shadow"
 }
 
 architectury {
@@ -50,32 +50,33 @@ repositories {
 dependencies {
     neoForge "net.neoforged:neoforge:$neoforge_version"
 
-    def forgeVer = "$minecraft_version-$forge_version"
-    compileOnly("net.minecraftforge:fmlloader:$forgeVer") { transitive false }
-//    compileOnly("net.minecraftforge:forge:$forgeVer:universal") { transitive false }
+    common(project(path: ":common")) { transitive false }
+    shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
 
-    common(project(path: ":common", configuration: "namedElements")) { transitive false }
-    shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge"))
-
-    modLocalRuntime "maven.modrinth:modernfix:rOLLd6NG"
-    modLocalRuntime "maven.modrinth:ferrite-core:$ferrite_core_version-neoforge"
-//    modLocalRuntime "maven.modrinth:sodium:$sodium_version-neoforge"
+    // Dev-only testing mods (no 26.1.2 builds wired up yet):
+//    localRuntime "maven.modrinth:modernfix:rOLLd6NG"
+//    localRuntime "maven.modrinth:ferrite-core:$ferrite_core_version-neoforge"
+//    localRuntime "maven.modrinth:sodium:$sodium_version-neoforge"
 }
 
 tasks.withType(Jar).configureEach {
     manifest.attributes.put 'MixinConfigs', mod_id + '.mixins.json'
 }
 
-shadowJar {
-    configurations = [project.configurations.shadowCommon]
-    archiveClassifier = "dev-shadow"
-    destinationDirectory.set destinationDirectory.dir('../devlibs').get()
-    exclude "architectury_inject*/**"
+// loom-no-remap: there is no remapJar. The Loom-processed `jar` becomes the "raw" base,
+// and shadowJar (which bundles the common module) becomes the primary output artifact.
+jar {
+    archiveClassifier = "raw"
 }
 
-remapJar {
-    inputFile.set shadowJar.archiveFile
-    dependsOn shadowJar
+shadowJar {
+    dependsOn(jar)
+    mainSpec.sourcePaths.clear()    // don't re-add the raw source set; use Loom's processed jar
+    from(zipTree(jar.archiveFile))  // preserves Loom modifications
+
+    configurations = [project.configurations.shadowCommon]
+    archiveClassifier = null
+    exclude "architectury_inject*/**"
 }
 
 sourcesJar {
@@ -88,4 +89,9 @@ components.java {
     withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
         skip()
     }
+}
+
+// Make the shadowJar (bundled, primary artifact) part of the normal build.
+tasks.named("assemble").configure {
+    dependsOn tasks.named("shadowJar")
 }
